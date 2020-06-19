@@ -25,7 +25,7 @@ class Game:
         self.player1 = player1
         self.player2 = player2
         #  init empty board
-        self.board_content = list('0'*9)
+        self.board_content = list(' '*9)
         self.turns = 0
 
 
@@ -69,6 +69,61 @@ def handle_client(player):
             return
 
 
+def handle_move(game, active_player, waiting_player):
+    active_player.connection.sendall(''.join(game.board_content).encode())
+    waiting_player.connection.sendall(''.join(game.board_content).encode())
+
+    active_player.connection.sendall(b'YES\r\n')
+    waiting_player.connection.sendall(b'NO\r\n')
+
+    try:
+        move = int(active_player.connection.recv(4).decode())
+        game.board_content[move-1] = active_player.sign
+
+        game.turns += 1
+        print(game.turns)
+        if game.turns >= 5:
+            result = check_winner(game, active_player)
+            if result != -1:
+                if result == 0:
+                    active_player.connection.sendall(''.join(game.board_content).encode())
+                    waiting_player.connection.sendall(''.join(game.board_content).encode())
+
+                    active_player.connection.sendall(b'DRAW\r\n')
+                    waiting_player.connection.sendall(b'DRAW\r\n')
+                    return True
+                elif result == 1:
+                    active_player.connection.sendall(''.join(game.board_content).encode())
+                    waiting_player.connection.sendall(''.join(game.board_content).encode())
+
+                    active_player.connection.sendall(b'WIN\r\n')
+                    waiting_player.connection.sendall(b'LOSE\r\n')
+                    return True
+        return False
+
+    except TypeError as err:
+        #  error
+        print(err)
+
+
+def check_winner(game, player):
+    '''1 stands for winner;   0 for draw;
+    -1 for result cant be determined yet'''
+
+    winning_moves = [
+        [0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6],
+        [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]
+    ]
+    board = game.board_content
+
+    for w_move in winning_moves:
+        if len(set([board[index] for index in w_move] + [player.sign])) == 1:
+            return 1
+        elif ' ' not in board:
+            return 0
+        return -1
+
+
 def handle_game(game):
     game.player1.send_matching_info()
     game.player2.send_matching_info()
@@ -83,25 +138,12 @@ def handle_game(game):
 
     while True:
         try:
-            game.player1.connection.sendall(''.join(game.board_content).encode())
-            game.player2.connection.sendall(''.join(game.board_content).encode())
-
-            game.player1.connection.sendall(b'YES\r\n')
-            game.player2.connection.sendall(b'NO\r\n')
-
-            move = int(game.player1.connection.recv(4).decode())
-            game.board_content[move-1] = game.player1.sign
-
-            game.player1.connection.sendall(''.join(game.board_content).encode())
-            game.player2.connection.sendall(''.join(game.board_content).encode())
-
-            game.player1.connection.sendall(b'NO\r\n')
-            game.player2.connection.sendall(b'YES\r\n')
-
-            move = int(game.player2.connection.recv(4).decode())
-            print(move)
-            game.board_content[move-1] = game.player2.sign
-
+            if handle_move(game, game.player1, game.player2):
+                return
+            print('second player turn')
+            if handle_move(game, game.player2, game.player1):
+                return
+            print('first loop end')
         except ValueError as err:
             #  send error message
             return

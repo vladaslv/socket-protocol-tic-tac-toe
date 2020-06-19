@@ -25,25 +25,42 @@ print(client_socket.recv(1024).decode())
 client_socket.send(b'ready')
 
 while True:
-    board_content = client_socket.recv(16).decode()
+    board_content = client_socket.recv(11).decode()
     print(board_content)
     draw_board(board_content)
-    is_my_turn = client_socket.recv(5).decode().strip()
-    print(is_my_turn)
+    command = client_socket.recv(6).decode().strip()
 
-    if is_my_turn == 'YES':
+    if command == 'YES':
         while True:
             try:
                 move = int(input('Your turn! Enter a position (1-9)>>>'))
                 if move in range(1, 10):
-                    break
+                    if board_content[move-1] != ' ':
+                        #  error
+                        print('''That position is not
+                         empty. Please choose another one''')
+                    else:
+                        #  user input is valid
+                        break
+                else:
+                    #  error
+                    print('Please enter a value in range 1-9')
             except ValueError as err:
                 #  error
                 print('Move value have wrong type')
 
         client_socket.sendall(str(move).encode())
-    else:
+    elif command == 'NO':
         print('Wait for the other player move...')
+    elif command == 'DRAW':
+        print('It\'s draw')
+        break
+    elif command == 'WIN':
+        print('You win!!!')
+        break
+    elif command == 'LOSE':
+        print('You lose')
+        break
 
 
 client_socket.shutdown(socket.SHUT_RDWR)
